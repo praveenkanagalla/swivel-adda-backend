@@ -8,22 +8,31 @@ import os
 app = Flask(__name__)
 CORS(app)
 
-# Secret key for JWT token (move to ENV variable for production!)
+# ✅ Secret key for JWT token (read from environment, fallback for local testing)
 SECRET_KEY = os.getenv("JWT_SECRET", "PRA24@123ab")
 
-# Database connection function
+# ✅ Database connection function (works for both local + Render)
 def get_db_connection():
-    return mysql.connector.connect(
-        host=os.getenv("DB_HOST", "127.0.0.1"),   # or cloud server hostname
-        port=int(os.getenv("DB_PORT", 3306)),
-        user=os.getenv("DB_USER", "root"),        # your MySQL username
-        password=os.getenv("DB_PASSWORD", "PRA24@123ab"), # your MySQL password
-        database=os.getenv("DB_NAME", "userdata") # your database name
-    )
+    try:
+        conn = mysql.connector.connect(
+            host=os.getenv("DB_HOST", "127.0.0.1"),  # Render will override this
+            port=int(os.getenv("DB_PORT", 3306)),
+            user=os.getenv("DB_USER", "root"),
+            password=os.getenv("DB_PASSWORD", "PRA24@123ab"),
+            database=os.getenv("DB_NAME", "userdata"),
+            connect_timeout=10
+        )
+        return conn
+    except mysql.connector.Error as err:
+        print("❌ Database connection failed:", err)
+        return None
 
-# Ensure table exists
+# ✅ Ensure table exists (only if DB available)
 def create_user_table():
     conn = get_db_connection()
+    if conn is None:
+        print("⚠️ Skipping table creation - No DB connection")
+        return
     cursor = conn.cursor()
     cursor.execute("""
         CREATE TABLE IF NOT EXISTS users (
@@ -49,15 +58,15 @@ def register():
         return jsonify({"message": "All fields are required"}), 400
 
     conn = get_db_connection()
-    cursor = conn.cursor()
+    if conn is None:
+        return jsonify({"message": "Database not connected"}), 500
 
-    # Check if user already exists
+    cursor = conn.cursor()
     cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
     if cursor.fetchone():
         conn.close()
         return jsonify({"message": "User already exists"}), 400
 
-    # Insert new user
     cursor.execute(
         "INSERT INTO users (name, email, password) VALUES (%s, %s, %s)",
         (name, email, password)
@@ -66,7 +75,6 @@ def register():
     conn.close()
 
     return jsonify({"message": "Registration successful"}), 200
-
 
 @app.route('/login', methods=['POST'])
 def login():
@@ -78,6 +86,9 @@ def login():
         return jsonify({"message": "Email and password required"}), 400
 
     conn = get_db_connection()
+    if conn is None:
+        return jsonify({"message": "Database not connected"}), 500
+
     cursor = conn.cursor(dictionary=True)
     cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
     user = cursor.fetchone()
@@ -86,7 +97,6 @@ def login():
     if not user or user['password'] != password:
         return jsonify({"message": "Invalid credentials"}), 401
 
-    # ✅ Generate JWT token
     payload = {
         'user_id': user['id'],
         'email': user['email'],
@@ -101,7 +111,6 @@ def login():
         "email": user['email']
     }), 200
 
-
 if __name__ == '__main__':
-    # In production, use `host="0.0.0.0"` and set `debug=False`
-    app.run(debug=True)
+    # ✅ In production Render uses gunicorn, locally you can run Flask
+    app.run(host="0.0.0.0", port=5000, debug=True)
