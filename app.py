@@ -1,9 +1,9 @@
 from flask import Flask, request, jsonify
 from flask_cors import CORS
-import psycopg2
 import jwt
 import datetime
 import os
+import psycopg
 
 app = Flask(__name__)
 CORS(app)
@@ -14,7 +14,7 @@ SECRET_KEY = os.getenv("JWT_SECRET", "PRA24@123ab")
 # ✅ Database connection
 def get_db_connection():
     try:
-        conn = psycopg2.connect(
+        conn = psycopg.connect(
             host=os.getenv("DB_HOST", "127.0.0.1"),
             port=int(os.getenv("DB_PORT", 5432)),
             user=os.getenv("DB_USER", "postgres"),
