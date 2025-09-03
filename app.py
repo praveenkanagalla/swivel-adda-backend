@@ -1,9 +1,13 @@
+import os
+import psycopg
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import jwt
 import datetime
-import os
-import psycopg
+from dotenv import load_dotenv
+
+# Load environment variables (local .env file support)
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
@@ -33,21 +37,21 @@ def create_user_table():
     if conn is None:
         print("⚠️ Skipping table creation - No DB connection")
         return
-    cursor = conn.cursor()
-    cursor.execute("""
-        CREATE TABLE IF NOT EXISTS users (
-            id SERIAL PRIMARY KEY,
-            name VARCHAR(255),
-            email VARCHAR(255) UNIQUE,
-            password VARCHAR(255)
-        )
-    """)
-    conn.commit()
-    cursor.close()
+    with conn.cursor() as cursor:
+        cursor.execute("""
+            CREATE TABLE IF NOT EXISTS users (
+                id SERIAL PRIMARY KEY,
+                name VARCHAR(255),
+                email VARCHAR(255) UNIQUE,
+                password VARCHAR(255)
+            )
+        """)
+        conn.commit()
     conn.close()
 
 create_user_table()
 
+# ✅ Register route
 @app.route('/register', methods=['POST'])
 def register():
     data = request.get_json()
@@ -62,23 +66,22 @@ def register():
     if conn is None:
         return jsonify({"message": "Database not connected"}), 500
 
-    cursor = conn.cursor()
-    cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
-    if cursor.fetchone():
-        cursor.close()
-        conn.close()
-        return jsonify({"message": "User already exists"}), 400
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+        if cursor.fetchone():
+            conn.close()
+            return jsonify({"message": "User already exists"}), 400
 
-    cursor.execute(
-        "INSERT INTO users (name, email, password) VALUES (%s, %s, %s)",
-        (name, email, password)
-    )
-    conn.commit()
-    cursor.close()
+        cursor.execute(
+            "INSERT INTO users (name, email, password) VALUES (%s, %s, %s)",
+            (name, email, password)
+        )
+        conn.commit()
     conn.close()
 
     return jsonify({"message": "Registration successful"}), 200
 
+# ✅ Login route
 @app.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -92,10 +95,9 @@ def login():
     if conn is None:
         return jsonify({"message": "Database not connected"}), 500
 
-    cursor = conn.cursor()
-    cursor.execute("SELECT id, name, email, password FROM users WHERE email = %s", (email,))
-    user = cursor.fetchone()
-    cursor.close()
+    with conn.cursor() as cursor:
+        cursor.execute("SELECT id, name, email, password FROM users WHERE email = %s", (email,))
+        user = cursor.fetchone()
     conn.close()
 
     if not user or user[3] != password:  # index 3 = password
@@ -114,6 +116,11 @@ def login():
         "name": user[1],
         "email": user[2]
     }), 200
+
+# ✅ Health check route
+@app.route('/')
+def home():
+    return jsonify({"message": "Flask API running with psycopg3 & Python 3.13.5!"})
 
 if __name__ == '__main__':
     app.run(host="0.0.0.0", port=5000, debug=True)
