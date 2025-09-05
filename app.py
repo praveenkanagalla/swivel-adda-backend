@@ -6,16 +6,16 @@ import jwt
 import datetime
 from dotenv import load_dotenv
 
-# Load environment variables (local .env file support)
+# ✅ Load environment variables (from .env locally, or Render env in production)
 load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
 
-# ✅ Secret key for JWT token
-SECRET_KEY = os.getenv("JWT_SECRET", "PRA24@123ab")
+# ✅ JWT Secret (always set in Render environment variables)
+SECRET_KEY = os.getenv("JWT_SECRET", "fallback_secret_key")
 
-# ✅ Database connection
+# ✅ Database connection helper
 def get_db_connection():
     try:
         conn = psycopg.connect(
@@ -31,7 +31,7 @@ def get_db_connection():
         print("❌ Database connection failed:", err)
         return None
 
-# ✅ Ensure table exists
+# ✅ Ensure users table exists
 def create_user_table():
     conn = get_db_connection()
     if conn is None:
@@ -51,7 +51,7 @@ def create_user_table():
 
 create_user_table()
 
-# ✅ Register route
+# ✅ Register endpoint
 @app.route('/register', methods=['POST'])
 def register():
     data = request.get_json()
@@ -67,7 +67,7 @@ def register():
         return jsonify({"message": "Database not connected"}), 500
 
     with conn.cursor() as cursor:
-        cursor.execute("SELECT * FROM users WHERE email = %s", (email,))
+        cursor.execute("SELECT 1 FROM users WHERE email = %s", (email,))
         if cursor.fetchone():
             conn.close()
             return jsonify({"message": "User already exists"}), 400
@@ -81,7 +81,7 @@ def register():
 
     return jsonify({"message": "Registration successful"}), 200
 
-# ✅ Login route
+# ✅ Login endpoint
 @app.route('/login', methods=['POST'])
 def login():
     data = request.get_json()
@@ -104,11 +104,11 @@ def login():
         return jsonify({"message": "Invalid credentials"}), 401
 
     payload = {
-        'user_id': user[0],
-        'email': user[2],
-        'exp': datetime.datetime.utcnow() + datetime.timedelta(hours=12)
+        "user_id": user[0],
+        "email": user[2],
+        "exp": datetime.datetime.utcnow() + datetime.timedelta(hours=12)
     }
-    token = jwt.encode(payload, SECRET_KEY, algorithm='HS256')
+    token = jwt.encode(payload, SECRET_KEY, algorithm="HS256")
 
     return jsonify({
         "message": f"Welcome back, {user[1]}!",
@@ -117,10 +117,12 @@ def login():
         "email": user[2]
     }), 200
 
-# ✅ Health check route
+# ✅ Health check
 @app.route('/')
 def home():
     return jsonify({"message": "Flask API running with psycopg3 & Python 3.13.5!"})
 
-if __name__ == '__main__':
-    app.run(host="0.0.0.0", port=5000, debug=True)
+# ✅ Run with waitress (production-ready)
+if __name__ == "__main__":
+    from waitress import serve
+    serve(app, host="0.0.0.0", port=int(os.environ.get("PORT", 5000)))
