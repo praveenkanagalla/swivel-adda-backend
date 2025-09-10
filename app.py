@@ -4,7 +4,11 @@ from flask import Flask, request, jsonify
 from flask_cors import CORS
 import jwt
 import datetime
+from dotenv import load_dotenv
 import razorpay
+
+# ✅ Load environment variables (from .env locally, or Render env in production)
+load_dotenv()
 
 app = Flask(__name__)
 CORS(app)
@@ -120,8 +124,8 @@ def home():
     return jsonify({"message": "Flask API running with psycopg3 & Python 3.13.5!"})
 
 # Razorpay Test Keys (set in .env or Render environment variables)
-RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "rzp_test_abc123")
-RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "xyz987secret")
+RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "rzp_test_xxxxxx")
+RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "xxxxxxx")
 
 razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
 
