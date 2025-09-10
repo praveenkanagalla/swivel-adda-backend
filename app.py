@@ -3,7 +3,7 @@ import psycopg
 from flask import Flask, request, jsonify
 from flask_cors import CORS
 import jwt
-import datetime
+import razorpay
 from dotenv import load_dotenv
 import razorpay
 
@@ -123,40 +123,39 @@ def login():
 def home():
     return jsonify({"message": "Flask API running with psycopg3 & Python 3.13.5!"})
 
-# ✅ Initialize Razorpay client
-razorpay_client = razorpay.Client(
-    auth=("rzp_test_xxxxxxxxxx", "your_secret_key")  # replace with your keys
-)
 
-@app.route("/create-order", methods=["POST"])
+# 🔑 Replace with your Razorpay Test Keys
+RAZORPAY_KEY_ID = "rzp_test_RFtj1A3i6aEjew"
+RAZORPAY_KEY_SECRET = "v5VGOV3nhe82BOD0dpUAsZYB"
+
+client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
+
+@app.route('/create-order', methods=['POST'])
 def create_order():
     data = request.get_json()
-    amount = data.get("amount")  # amount in paise
+    amount = data.get('amount')
+    if not amount:
+        return jsonify({"error": "Amount is required"}), 400
 
     try:
-        order = razorpay_client.order.create({
-            "amount": amount,
+        # Razorpay expects amount in paise
+        order = client.order.create({
+            "amount": int(amount) * 100,
             "currency": "INR",
             "payment_capture": 1
         })
-        return jsonify({
-            "id": order["id"],
-            "currency": order["currency"],
-            "amount": order["amount"],
-            "key": "rzp_test_xxxxxxxxxx"  # publishable key
-        })
-    except Exception as e:
+        return jsonify(order)
+    except razorpay.errors.RazorpayError as e:
         return jsonify({"error": str(e)}), 500
 
-@app.route("/verify-payment", methods=["POST"])
+@app.route('/verify-payment', methods=['POST'])
 def verify_payment():
     data = request.get_json()
     try:
-        # Razorpay utility verifies the signature
-        razorpay_client.utility.verify_payment_signature(data)
-        return jsonify({"status": "success"})
-    except Exception as e:
-        return jsonify({"status": "failed", "error": str(e)}), 400
+        client.utility.verify_payment_signature(data)
+        return jsonify({"status": "Payment Verified"})
+    except razorpay.errors.SignatureVerificationError:
+        return jsonify({"status": "Payment Verification Failed"}), 400
 
 # ✅ Run with waitress (production-ready)
 if __name__ == "__main__":
