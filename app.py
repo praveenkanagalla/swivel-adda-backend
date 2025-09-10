@@ -123,37 +123,40 @@ def login():
 def home():
     return jsonify({"message": "Flask API running with psycopg3 & Python 3.13.5!"})
 
-# Razorpay Test Keys (set in .env or Render environment variables)
-RAZORPAY_KEY_ID = os.getenv("RAZORPAY_KEY_ID", "rzp_test_xxxxxx")
-RAZORPAY_KEY_SECRET = os.getenv("RAZORPAY_KEY_SECRET", "xxxxxxx")
+# ✅ Initialize Razorpay client
+razorpay_client = razorpay.Client(
+    auth=("rzp_test_xxxxxxxxxx", "your_secret_key")  # replace with your keys
+)
 
-razorpay_client = razorpay.Client(auth=(RAZORPAY_KEY_ID, RAZORPAY_KEY_SECRET))
-
-# ✅ Create Razorpay Order
-@app.route('/create-order', methods=['POST'])
+@app.route("/create-order", methods=["POST"])
 def create_order():
+    data = request.get_json()
+    amount = data.get("amount")  # amount in paise
+
     try:
-        data = request.get_json()
-        amount = data.get("amount", 50000)  # default ₹500 (in paise)
-
-        # Create an order in Razorpay
         order = razorpay_client.order.create({
-            "amount": amount,        # Amount in paise (₹500 = 50000)
+            "amount": amount,
             "currency": "INR",
-            "payment_capture": 1     # Auto capture
+            "payment_capture": 1
         })
-
         return jsonify({
             "id": order["id"],
-            "amount": order["amount"],
             "currency": order["currency"],
-            "status": order["status"],
-            "key": RAZORPAY_KEY_ID   # Send Key ID to frontend
-        }), 200
-
+            "amount": order["amount"],
+            "key": "rzp_test_xxxxxxxxxx"  # publishable key
+        })
     except Exception as e:
-        print("❌ Razorpay order creation failed:", str(e))
-        return jsonify({"message": "Failed to create order", "error": str(e)}), 500
+        return jsonify({"error": str(e)}), 500
+
+@app.route("/verify-payment", methods=["POST"])
+def verify_payment():
+    data = request.get_json()
+    try:
+        # Razorpay utility verifies the signature
+        razorpay_client.utility.verify_payment_signature(data)
+        return jsonify({"status": "success"})
+    except Exception as e:
+        return jsonify({"status": "failed", "error": str(e)}), 400
 
 # ✅ Run with waitress (production-ready)
 if __name__ == "__main__":
